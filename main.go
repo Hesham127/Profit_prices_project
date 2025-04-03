@@ -8,11 +8,28 @@ import (
 
 func main() {
 	taxRates := []float64{0, 0.7, 0.1, 0.15}
+	doneChanels := make([]chan bool, 4)
+	errorChanels := make([]chan error, 4)
 
-	for _, taxRate := range taxRates {
+	for index, taxRate := range taxRates {
+		doneChanels[index] = make(chan bool)
+		errorChanels[index] = make(chan error)
+
 		fm := filemanger.New("prices.txt", fmt.Sprintf("result_ %0.f", taxRate))
+		// cm := cmdmanger.New() if u wanna try care from go rotuines
 		priceJob := prices.NewTaxIncludedPriceJop(fm, taxRate)
-		priceJob.Process()
+		go priceJob.Process(doneChanels[index], errorChanels[index])
+
+	}
+	for index := range taxRates {
+
+		select {
+		case err := <-errorChanels[index]:
+			if err != nil {
+				fmt.Println(err)
+			}
+		case <-doneChanels[index]:
+		}
 	}
 
 }

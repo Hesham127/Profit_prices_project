@@ -3,38 +3,41 @@ package prices
 import (
 	"fmt"
 	"price_calculator/conversions"
-	"price_calculator/filemanger"
+	"price_calculator/iomanger"
+	"time"
 )
 
 type TaxIncludedPriceJop struct {
-	IoManger          filemanger.Filemanger `json:"-"`
-	TaxRate           float64               `json:"tax_rate"`
-	InputPrices       []float64             `json:"input_prices"`
-	TaxIncludedPrices map[string]string     `json:"tax_included_prices"`
+	IoManger          iomanger.IoManger `json:"-"`
+	TaxRate           float64           `json:"tax_rate"`
+	InputPrices       []float64         `json:"input_prices"`
+	TaxIncludedPrices map[string]string `json:"tax_included_prices"`
 }
 
-func (job *TaxIncludedPriceJop) loadData() {
+func (job *TaxIncludedPriceJop) loadData() error {
 
 	lines, err := job.IoManger.ReadFile()
 	if err != nil {
-		fmt.Println("There is an Error!")
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	prices, err := conversions.StringsToFloats(lines)
 
 	if err != nil {
-		fmt.Println("There is an Error!")
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	job.InputPrices = prices
 	// fmt.Printf("loaded Prices %f \n", job.InputPrices)
+	return nil
 }
-func (job *TaxIncludedPriceJop) Process() {
-	job.loadData()
+func (job *TaxIncludedPriceJop) Process(doneChanel chan bool, errorChanel chan error) error {
+	err := job.loadData()
+	if err != nil {
+		errorChanel <- err
+		return err
+	}
+	time.Sleep(3 * time.Second)
 	result := make(map[string]string)
 	for _, price := range job.InputPrices {
 		taxIncludePrice := price * (1 + job.TaxRate)
@@ -42,12 +45,15 @@ func (job *TaxIncludedPriceJop) Process() {
 	}
 	job.TaxIncludedPrices = result
 	job.IoManger.WriteResult(job)
+	fmt.Printf("DONE! %f ", job.TaxRate)
+	doneChanel <- true
+	return nil
 }
 
-func NewTaxIncludedPriceJop(fm filemanger.Filemanger, taxRate float64) *TaxIncludedPriceJop {
+func NewTaxIncludedPriceJop(ioManger iomanger.IoManger, taxRate float64) *TaxIncludedPriceJop {
 
 	return &TaxIncludedPriceJop{
-		IoManger:          fm,
+		IoManger:          ioManger,
 		InputPrices:       []float64{10., 20., 30.},
 		TaxRate:           taxRate,
 		TaxIncludedPrices: make(map[string]string),
